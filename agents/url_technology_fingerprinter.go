@@ -314,14 +314,11 @@ func (a *URLTechnologyFingerprinter) detectFeatures(page *core.Page) {
 		a.session.Out.Debug("[%s] Detected open-redirect parameter on %s\n", a.ID(), page.URL)
 	}
 
-	if kw := interestingTitleKeyword(page.PageTitle, doc); kw != "" {
-		page.AddTag("Interesting Title", "danger", "")
+	// Interesting title keywords use their own tag type so they feed the
+	// report's Interesting Titles tab without polluting the Features tab.
+	for _, kw := range findInterestingTitleKeywords(page.PageTitle, doc) {
+		page.AddTag(kw, "interesting", "")
 		a.session.Out.Debug("[%s] Interesting title keyword %q on %s\n", a.ID(), kw, page.URL)
-	}
-
-	if kw := interestingHostnameKeyword(page.URL); kw != "" {
-		page.AddTag("Interesting Hostname", "danger", "")
-		a.session.Out.Debug("[%s] Interesting hostname keyword %q on %s\n", a.ID(), kw, page.URL)
 	}
 
 	if a.hasCaptcha(lowerBody) {

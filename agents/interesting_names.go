@@ -1,19 +1,20 @@
 package agents
 
 import (
-	"net/url"
-	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
-// --- Interesting Title / Hostname Detection ---
+// --- Interesting Title Detection ---
 //
-// Bug-bounty style triage signals: a page whose <title> or hostname carries a
-// word such as "admin", "dev", "preprod" or "jenkins" is worth a manual look
-// even when no other feature fired. Titles are matched on whole words only,
-// hostnames on individual labels (split on ".", "-" and "_").
+// Bug-bounty style triage signal: a page whose <title> carries a word such as
+// "admin", "dev", "preprod", "intranet" or "jenkins" is worth a manual look
+// even when no other feature fired. Every matched keyword becomes a tag of
+// type "interesting" so the report's Interesting Titles tab can group pages
+// by keyword. Matching is on whole words only, Unicode-aware, so "test" does
+// not match "détest" and "dev" does not match "devices".
 
 var interestingTitleKeywords = []string{
 	// Environments
@@ -50,84 +51,42 @@ var interestingTitleKeywords = []string{
 	"upload", "file manager", "backup", "backups", "legacy", "old", "temp", "tmp", "wip", "todo",
 }
 
-// Exact hostname label tokens (after splitting on "-" and "_" and stripping up
-// to two trailing digits, so "dev01" and "ppr-2" match too).
-var interestingHostnameTokens = []string{
-	// Environments
-	"dev", "devel", "develop", "development", "developer", "developers",
-	"staging", "stg", "stag", "preprod", "pprod", "ppr", "prp", "prep", "preproduction",
-	"uat", "qa", "test", "tst", "testing", "sandbox", "sbx", "demo", "beta", "alpha", "canary", "preview",
-	"lab", "labs", "poc", "pilot", "recette", "rec",
-	// Access scope
-	"int", "internal", "intra", "intranet", "corp", "corporate", "priv", "private", "dmz",
-	// Administration
-	"admin", "adm", "administrator", "backoffice", "console", "panel", "cpanel", "plesk", "webmin",
-	"dashboard", "portal", "cms", "manage", "management", "mgmt",
-	// Ops / monitoring
-	"ops", "devops", "sre", "infra", "tools", "tool", "utils", "monitor", "monitoring", "mon", "metrics",
-	"debug", "logs", "log", "syslog", "splunk", "graylog", "elk", "elastic", "kibana", "grafana", "prometheus",
-	"zabbix", "nagios",
-	// CI / code / artifacts
-	"ci", "build", "jenkins", "gitlab", "git", "svn", "jira", "confluence", "wiki", "sonar", "sonarqube",
-	"nexus", "artifactory", "registry", "docker", "harbor", "k8s", "kube", "kubernetes", "rancher",
-	"portainer", "vault", "consul", "argocd", "airflow",
-	// Remote access / mail
-	"vpn", "sslvpn", "remote", "citrix", "rdp", "rds", "owa", "webmail", "mail", "exchange",
-	// Files / data
-	"ftp", "sftp", "files", "upload", "uploads", "share", "nas", "backup", "backups", "bak",
-	"old", "legacy", "archive", "tmp", "temp", "new",
-	"db", "database", "mysql", "mariadb", "postgres", "pgsql", "mongo", "mongodb", "redis", "sql",
-	"phpmyadmin", "pma", "adminer",
-	// APIs / auth
-	"api", "apis", "rest", "graphql", "soap", "swagger", "v1", "v2",
-	"sso", "auth", "login", "oauth", "idp", "ldap", "iam", "keycloak",
-}
-
-// Strong keywords also matched as a prefix or suffix of a whole label, so
-// "testaes", "devportal" or "myadmin" are caught.
-var interestingHostnameAffixes = []string{"test", "admin", "staging", "preprod", "sandbox", "uat"}
-
-// Labels that contain an affix keyword but are ordinary words.
-var interestingHostnameAffixStoplist = map[string]bool{
-	"contest": true, "contests": true, "latest": true, "greatest": true, "fastest": true,
-	"protest": true, "attest": true, "attestation": true, "testimonial": true, "testimonials": true,
-}
-
-// Second-level labels under which the registrable domain has three labels
-// (example.co.uk, example.com.au).
-var secondLevelDomainLabels = map[string]bool{
-	"co": true, "com": true, "org": true, "net": true, "gov": true, "edu": true, "ac": true, "gouv": true,
-}
-
-var interestingTitlePattern = buildKeywordPattern(interestingTitleKeywords)
-
-// At most two trailing digits are stripped ("dev01", "uat2"); longer digit
-// runs are product names ("ci360", "sap4000"), not environment counters.
-var trailingDigitsPattern = regexp.MustCompile(`\d{1,2}$`)
-
-// buildKeywordPattern compiles a case-insensitive, word-bounded alternation
-// of the given keywords. Longest keywords first so "pre-prod" wins over "pre".
-func buildKeywordPattern(keywords []string) *regexp.Regexp {
-	sorted := append([]string(nil), keywords...)
-	for i := 1; i < len(sorted); i++ {
-		for j := i; j > 0 && len(sorted[j]) > len(sorted[j-1]); j-- {
-			sorted[j], sorted[j-1] = sorted[j-1], sorted[j]
+// normalizeWords lower-cases text and collapses every run of non-letter,
+// non-digit characters into a single space, surrounded by spaces so that a
+// " keyword " substring search is a whole-word match. "Pre-Prod (Admin)"
+// becomes " pre prod admin ".
+func normalizeWords(text string) string {
+	var b strings.Builder
+	b.WriteByte(' ')
+	lastSpace := true
+	for _, r := range strings.ToLower(text) {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) {
+			b.WriteRune(r)
+			lastSpace = false
+		} else if !lastSpace {
+			b.WriteByte(' ')
+			lastSpace = true
 		}
 	}
-	quoted := make([]string, 0, len(sorted))
-	for _, kw := range sorted {
-		quoted = append(quoted, regexp.QuoteMeta(kw))
+	if !lastSpace {
+		b.WriteByte(' ')
 	}
-	// Unicode-aware boundaries: \b only knows ASCII word characters, which
-	// would let "test" match inside "détest". Use explicit non-letter guards.
-	return regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(` + strings.Join(quoted, "|") + `)(?:$|[^\p{L}\p{N}])`)
+	return b.String()
 }
 
-// interestingTitleKeyword returns the first juicy keyword found in the page
-// title, or "" when there is none. The <title> from the parsed body is
+var normalizedTitleKeywords = func() []string {
+	out := make([]string, 0, len(interestingTitleKeywords))
+	for _, kw := range interestingTitleKeywords {
+		out = append(out, strings.TrimSpace(normalizeWords(kw)))
+	}
+	return out
+}()
+
+// findInterestingTitleKeywords returns every juicy keyword found in the page
+// title, in keyword-list order, or nil. The <title> from the parsed body is
 // preferred because the title extractor agent runs concurrently and may not
 // have populated page.PageTitle yet.
-func interestingTitleKeyword(pageTitle string, doc *goquery.Document) string {
+func findInterestingTitleKeywords(pageTitle string, doc *goquery.Document) []string {
 	title := ""
 	if doc != nil {
 		title = doc.Find("title").First().Text()
@@ -135,74 +94,21 @@ func interestingTitleKeyword(pageTitle string, doc *goquery.Document) string {
 	if strings.TrimSpace(title) == "" {
 		title = pageTitle
 	}
-	title = strings.Join(strings.Fields(title), " ")
-	if title == "" {
-		return ""
-	}
-	if m := interestingTitlePattern.FindStringSubmatch(title); m != nil {
-		return strings.ToLower(m[1])
-	}
-	return ""
-}
-
-// interestingHostnameKeyword returns the first juicy keyword found in the
-// hostname labels of rawURL (registrable domain excluded), or "".
-func interestingHostnameKeyword(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
-	host := strings.ToLower(u.Hostname())
-	if host == "" || isIPAddress(host) {
-		return ""
+	normalized := normalizeWords(title)
+	if strings.TrimSpace(normalized) == "" {
+		return nil
 	}
 
-	labels := strings.Split(host, ".")
-	// Drop the registrable domain: it names the target, not an environment.
-	drop := 2
-	if len(labels) >= 3 && secondLevelDomainLabels[labels[len(labels)-2]] {
-		drop = 3
-	}
-	if len(labels) <= drop {
-		return ""
-	}
-	labels = labels[:len(labels)-drop]
-
-	for _, label := range labels {
-		if label == "www" {
+	var found []string
+	seen := map[string]bool{}
+	for i, kw := range normalizedTitleKeywords {
+		if seen[kw] {
 			continue
 		}
-		for _, token := range strings.FieldsFunc(label, func(r rune) bool { return r == '-' || r == '_' }) {
-			token = trailingDigitsPattern.ReplaceAllString(token, "")
-			if token == "" {
-				continue
-			}
-			for _, kw := range interestingHostnameTokens {
-				if token == kw {
-					return kw
-				}
-			}
-		}
-		if interestingHostnameAffixStoplist[label] {
-			continue
-		}
-		for _, kw := range interestingHostnameAffixes {
-			if len(label) > len(kw) && (strings.HasPrefix(label, kw) || strings.HasSuffix(label, kw)) {
-				return kw
-			}
+		if strings.Contains(normalized, " "+kw+" ") {
+			seen[kw] = true
+			found = append(found, strings.ToLower(interestingTitleKeywords[i]))
 		}
 	}
-	return ""
-}
-
-func isIPAddress(host string) bool {
-	if strings.Contains(host, ":") {
-		return true
-	}
-	for _, r := range host {
-		if (r < '0' || r > '9') && r != '.' {
-			return false
-		}
-	}
-	return true
+	return found
 }

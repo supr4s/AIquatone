@@ -204,6 +204,13 @@
       margin-left: 8px;
     }
 
+    .badge-juicy {
+      background-color: #6f42c1;
+      color: #fff;
+    }
+    .badge-juicy.active {
+      background-color: #007bff;
+    }
     .feature-url-card {
       border: 1px solid rgba(0,0,0,.125);
       border-radius: 4px;
@@ -306,6 +313,9 @@
         </li>
         <li class="nav-item">
           <a class="nav-link" href="#/pages/features">Features</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#/pages/interesting-titles">Interesting Titles</a>
         </li>
       </ul>
     </div>
@@ -510,7 +520,8 @@
 
   <script type="text/x-template" id="featuresPageTemplate">
     <div>
-      <h2 class="display-4 text-center border-bottom pb-3">Features</h2>
+      <h2 class="display-4 text-center border-bottom pb-3">${ title }</h2>
+      <p v-if="subtitle" class="text-center text-muted">${ subtitle }</p>
       <div class="tag-filter-container">
         <div class="mb-3">
           <span v-for="feat in sortedFeatures"
@@ -562,7 +573,7 @@
           </div>
         </div>
         <div v-else class="text-center text-muted mt-5">
-          <h5>Select a feature to see matching URLs</h5>
+          <h5>${ emptyHint }</h5>
         </div>
       </div>
     </div>
@@ -866,6 +877,9 @@
       }
     });
 
+    // Generic "group pages by tag" view. Used for the Features tab
+    // (feature + danger tags, with a virtual Uncategorized bucket) and the
+    // Interesting Titles tab (one badge per juicy keyword found in <title>).
     Vue.component('FeaturesPage', {
       template: '#featuresPageTemplate',
       delimiters: ['${', '}'],
@@ -878,7 +892,12 @@
         }
       },
       props: {
-        pages: Array
+        pages: Array,
+        title: { type: String, default: 'Features' },
+        subtitle: { type: String, default: '' },
+        emptyHint: { type: String, default: 'Select a feature to see matching URLs' },
+        tagTypes: { type: Array, default: () => ['feature', 'danger'] },
+        showUncategorized: { type: Boolean, default: true }
       },
       computed: {
         allSelected() {
@@ -888,7 +907,7 @@
           let feats = {};
           let featsType = {};
           let categorizedUrls = new Set();
-          let featureTypes = ['feature', 'danger'];
+          let featureTypes = this.tagTypes;
           for (let page of this.pages) {
             let hasCategoryTag = false;
             if (page.tags) {
@@ -915,14 +934,14 @@
             }
           }
           let result = Object.keys(feats).map(name => ({name: name, count: feats[name], tagType: featsType[name]})).sort((a, b) => b.count - a.count);
-          if (uncatCount > 0) {
+          if (this.showUncategorized && uncatCount > 0) {
             result.push({name: 'Uncategorized', count: uncatCount, tagType: 'uncategorized'});
           }
           return result;
         },
         filteredPages() {
           if (!this.selectedFeature) return [];
-          let featureTypes = ['feature', 'danger'];
+          let featureTypes = this.tagTypes;
           if (this.selectedFeature === 'Uncategorized') {
             return this.pages.filter(page => {
               if (!page.tags) return true;
@@ -938,6 +957,12 @@
       watch: {
         selectedFeature() {
           this.selectedUrls = [];
+        },
+        // The router reuses this component between the Features and
+        // Interesting Titles routes; reset the selection when switching.
+        title() {
+          this.selectedFeature = null;
+          this.selectedUrls = [];
         }
       },
       methods: {
@@ -945,11 +970,13 @@
           if (this.selectedFeature === feat.name) return 'badge-primary active';
           if (feat.tagType === 'uncategorized') return 'badge-secondary';
           if (feat.tagType === 'danger') return 'badge-danger';
+          if (feat.tagType === 'interesting') return 'badge-juicy';
           return 'badge-warning';
         },
         badgeClassForTag(tag) {
           if (tag.type === 'danger') return 'badge-danger';
           if (tag.type === 'feature') return 'badge-warning';
+          if (tag.type === 'interesting') return 'badge-juicy';
           return 'badge-secondary';
         },
         selectFeature(name) {
@@ -1064,6 +1091,7 @@
         badgeClassForTag(tag) {
           if (tag.type === 'feature') return 'badge-warning';
           if (tag.type === 'danger') return 'badge-danger';
+          if (tag.type === 'interesting') return 'badge-juicy';
           return 'badge-info';
         },
         zoomScreenshot(event) {
@@ -1140,6 +1168,7 @@
         { path: '/pages/graph', component: Vue.component('GraphPage'), props: { pages: data.pages, pageSimilarityClusters: data.pageSimilarityClusters } },
         { path: '/pages/technologies', component: Vue.component('TechnologiesPage'), props: { pages: data.pages } },
         { path: '/pages/features', component: Vue.component('FeaturesPage'), props: { pages: data.pages } },
+        { path: '/pages/interesting-titles', component: Vue.component('FeaturesPage'), props: { pages: data.pages, title: 'Interesting Titles', subtitle: 'Pages whose <title> contains a triage keyword (admin, dev, preprod, intranet, jenkins, vpn, backup, ...)', emptyHint: 'Select a keyword to see pages whose title contains it', tagTypes: ['interesting'], showUncategorized: false } },
         { path: '/pages/stats', component: Vue.component('StatsPage'), props: { pages: data.pages, pageSimilarityClusters: data.pageSimilarityClusters, stats: data.stats } },
         { path: '*', component: Vue.component('NotFoundPage') }
       ]

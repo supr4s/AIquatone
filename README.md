@@ -25,8 +25,8 @@ map them to CVEs.
 - Identify login, signup, SSO, MFA, admin, API, upload, debug, default-install,
   sensitive-exposure, cloud-storage, control-panel and payment surfaces
 - Flag open-redirect query parameters and CAPTCHA-protected forms
-- Flag "juicy" titles and hostnames (admin, dev, preprod, staging, jenkins,
-  vpn, backup, ...) for bug-bounty style triage
+- Flag "juicy" page titles (admin, dev, preprod, intranet, jenkins, vpn,
+  backup, ...) in a dedicated Interesting Titles report tab
 - Separate full authentication pages from simple login or signup links
 - Cluster structurally similar pages
 - Generate an interactive HTML report with technology and feature filters

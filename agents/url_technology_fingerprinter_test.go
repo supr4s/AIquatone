@@ -308,55 +308,36 @@ func TestSSOProviderGoogleBeforeSAML(t *testing.T) {
 	}
 }
 
-func TestInterestingTitleKeyword(t *testing.T) {
-	cases := map[string]string{
-		"Admin - MyApp":                        "admin",
-		"MyApp (preprod)":                      "preprod",
-		"Jenkins [Jenkins]":                    "jenkins",
-		"Index of /backup":                     "index of",
-		"Tableau de bord":                      "tableau de bord",
-		"Dashboard DEV":                        "dashboard",
-		"Orange 5G Lab":                        "",
-		"Sign in - Google Accounts":            "",
-		"Speedtest by Ookla":                   "",
-		"Nos offres de stage et développement": "développement",
-		"Je déteste les lundis":                "",
-		"Contest results":                      "",
-		"Devices and accessories":              "",
+func TestInterestingTitleKeywords(t *testing.T) {
+	cases := map[string][]string{
+		"Admin - MyApp":                        {"admin"},
+		"MyApp (preprod)":                      {"preprod"},
+		"MyApp Pre-Prod":                       {"pre-prod"},
+		"Jenkins [Jenkins]":                    {"jenkins"},
+		"Index of /backup":                     {"index of", "backup"},
+		"Tableau de bord":                      {"tableau de bord"},
+		"Dashboard DEV":                        {"dev", "dashboard"},
+		"Intranet interne - Administration":    {"intranet", "interne", "administration"},
+		"Orange 5G Lab":                        nil,
+		"Sign in - Google Accounts":            nil,
+		"Speedtest by Ookla":                   nil,
+		"Nos offres de stage et développement": {"développement"},
+		"Je déteste les lundis":                nil,
+		"Contest results":                      nil,
+		"Devices and accessories":              nil,
+		"":                                     nil,
 	}
 	for title, want := range cases {
-		if got := interestingTitleKeyword(title, nil); got != want {
-			t.Errorf("%q: got %q, want %q", title, got, want)
+		got := findInterestingTitleKeywords(title, nil)
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("%q: got %v, want %v", title, got, want)
 		}
 	}
 	doc := parseDocForTest(t, `<html><head><title>  Staging &ndash; Shop </title></head></html>`)
-	if got := interestingTitleKeyword("", doc); got != "staging" {
-		t.Errorf("doc title: got %q", got)
+	if got := findInterestingTitleKeywords("ignored fallback", doc); strings.Join(got, ",") != "staging" {
+		t.Errorf("doc title: got %v", got)
 	}
-}
-
-func TestInterestingHostnameKeyword(t *testing.T) {
-	cases := map[string]string{
-		"https://temperature-dashboard-dev.orange.ro/": "dashboard",
-		"https://ndt-sbx.example.com/":                 "sbx",
-		"https://nbe-ppr.example.com/":                 "ppr",
-		"http://testaes.example.com:8080/":             "test",
-		"https://dev01.example.co.uk/":                 "dev",
-		"https://my-admin.example.com/":                "admin",
-		"https://contest.example.com/":                 "",
-		"https://devices.example.com/":                 "",
-		"https://www.example.com/":                     "",
-		"https://example.com/admin":                    "",
-		"https://test.com/":                            "",
-		"http://10.0.0.1:8080/":                        "",
-		"https://newsroom.example.com/":                "",
-		"https://content-ci360.example.com/":           "",
-		"https://ci.example.com/":                      "ci",
-		"https://uat2.example.com/":                    "uat",
-	}
-	for raw, want := range cases {
-		if got := interestingHostnameKeyword(raw); got != want {
-			t.Errorf("%s: got %q, want %q", raw, got, want)
-		}
+	if got := findInterestingTitleKeywords("Fallback admin", parseDocForTest(t, `<html><head></head></html>`)); strings.Join(got, ",") != "admin" {
+		t.Errorf("fallback title: got %v", got)
 	}
 }
