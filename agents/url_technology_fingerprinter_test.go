@@ -275,7 +275,7 @@ func TestAdminPageIgnoresSubstringsAndLongHeadings(t *testing.T) {
 
 func TestSensitiveExposureIgnoresPublicAPIKeys(t *testing.T) {
 	f := &URLTechnologyFingerprinter{}
-	body := `<script>const ghostSearchApiKey = '8f6024127a20112c41b734c513'; var api_key = "AIza..."; </script>`
+	body := `<script>const ghostSearchApiKey = '0123456789abcdef0123456789'; var api_key = "AIza..."; </script>`
 	if f.hasSensitiveExposure(nil, strings.ToLower(body), "https://example.com/") {
 		t.Fatalf("public api keys must not trigger Sensitive Exposure")
 	}
