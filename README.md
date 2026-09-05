@@ -1,20 +1,32 @@
 # AIquatone
 
-AIquatone is a deterministic web reconnaissance and attack-surface triage tool.
-It probes hosts, collects HTTP evidence, captures screenshots, fingerprints
-technologies and highlights pages worth reviewing during authorized security
-testing.
+AIquatone is a fork of [Aquatone](https://github.com/michenriksen/aquatone),
+the superb visual reconnaissance tool created by Michael Henriksen and
+archived in January 2023. The idea behind this project is simple: pick up
+development where Aquatone left off, make it faster and more reliable on
+large scopes, and add a handful of features that matter in today's bug bounty
+and pentest workflows, without changing what made the original great.
 
-AIquatone is a fork of
-[Aquatone](https://github.com/michenriksen/aquatone), created by Michael
-Henriksen and archived in January 2023. The original project provides the scan
-pipeline, Chromium capture and HTML report architecture. This fork updates that
-base and adds rule-based triage focused on current bug bounty workflows.
+Compared to the archived Aquatone, AIquatone:
 
-AIquatone contains no AI model and makes no AI service calls at runtime. Its
-results come from reproducible HTTP, DNS, browser, fingerprint and heuristic
-signals. Detected product versions are inventory data only: the tool does not
-map them to CVEs.
+- Handles scans of 500-1000+ URLs without leaking file descriptors or
+  crashing Chrome (per-screenshot profiles, bounded Chrome concurrency,
+  batched URL publishing)
+- Replaces the stale embedded fingerprints with the maintained
+  `wappalyzergo` library, with version detection
+- Adds rule-based triage: login, signup, SSO, MFA, admin, API, upload,
+  debug, default-install, sensitive-exposure, cloud-storage, control-panel,
+  payment, open-redirect and CAPTCHA signals, plus 404 classification
+- Adds an Interesting Titles tab that surfaces "juicy" page titles (admin,
+  dev, preprod, intranet, jenkins, vpn, backup, ...)
+- Ships an updated interactive report with Technologies, Features and
+  Interesting Titles tabs and URL export
+- Builds and runs on Linux and Windows, with pre-built binaries
+
+AIquatone is deterministic: it contains no AI model and makes no AI service
+calls at runtime. Its results come from reproducible HTTP, DNS, browser,
+fingerprint and heuristic signals. Detected product versions are inventory
+data only: the tool does not map them to CVEs.
 
 ## Features
 
@@ -82,7 +94,6 @@ go build -o aiquatone .
 The output directory is created if it does not exist.
 
 ```bash
-mkdir -p results
 cat targets.txt | ./aiquatone -out ./results
 ```
 
@@ -125,5 +136,10 @@ go-bindata -pkg core -o core/bindata.go static/
 
 ## License and origin
 
-AIquatone is distributed under the MIT License inherited from Aquatone. See
-[`LICENSE.txt`](LICENSE.txt) and [`NOTICE`](NOTICE) for attribution.
+AIquatone is free and open source software, distributed under the MIT
+License, the same license as the original Aquatone. You can use, modify,
+redistribute and build on it, commercially or not, as long as the copyright
+and license notices are kept. See [`LICENSE.txt`](LICENSE.txt) for the full
+text and [`NOTICE`](NOTICE) for attribution to the original project.
+
+Contributions are welcome through issues and pull requests.
