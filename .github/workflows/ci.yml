@@ -28,3 +28,10 @@ jobs:
 
       - name: Build
         run: go build -o aiquatone .
+
+      - name: Cross-compile Windows
+        env:
+          CGO_ENABLED: "0"
+          GOOS: windows
+          GOARCH: amd64
+        run: go vet ./... && go build -o aiquatone.exe .

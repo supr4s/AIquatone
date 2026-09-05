@@ -41,6 +41,30 @@ pipeline.
 
 ## Install
 
+### Pre-built binaries
+
+Download the archive for your platform from the
+[Releases page](https://github.com/supr4s/AIquatone/releases):
+
+| Platform | Archive |
+|----------|---------|
+| Linux amd64 | `aiquatone_<version>_linux_amd64.tar.gz` |
+| Windows amd64 | `aiquatone_<version>_windows_amd64.zip` |
+
+Each release ships a `checksums.txt` with SHA-256 sums.
+
+```bash
+# Linux
+tar -xzf aiquatone_<version>_linux_amd64.tar.gz
+./aiquatone -h
+```
+
+On Windows, extract the zip and run `aiquatone.exe` from PowerShell or `cmd`.
+Chrome or Chromium is auto-detected in `Program Files`, `Program Files (x86)`
+and `LocalAppData`; use `-chrome-path` otherwise.
+
+### From source
+
 ```bash
 go install github.com/supr4s/aiquatone@latest
 ```

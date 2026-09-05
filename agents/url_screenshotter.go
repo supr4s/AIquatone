@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/supr4s/aiquatone/core"
@@ -96,7 +96,17 @@ func (a *URLScreenshotter) locateChrome() {
 		"/usr/bin/google-chrome-unstable",
 		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 		"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
-		"C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+	}
+	if runtime.GOOS == "windows" {
+		for _, base := range []string{os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)"), os.Getenv("LocalAppData")} {
+			if base == "" {
+				continue
+			}
+			paths = append(paths,
+				filepath.Join(base, "Chromium", "Application", "chrome.exe"),
+				filepath.Join(base, "Google", "Chrome", "Application", "chrome.exe"),
+			)
+		}
 	}
 
 	for _, path := range paths {
@@ -179,9 +189,9 @@ func (a *URLScreenshotter) screenshotPage(page *core.Page) {
 	cmd := exec.CommandContext(ctx, a.chromePath, chromeArguments...)
 	cmd.Stderr = nil
 	cmd.Stdout = nil
-	// Run Chrome in its own process group so we can reap the whole tree
-	// (renderer, gpu, zygote children) on timeout instead of leaking them.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Platform-specific setup so the whole Chrome tree (renderer, gpu,
+	// zygote children) can be reaped on timeout instead of leaking.
+	configureChromeProcess(cmd)
 
 	if err := cmd.Start(); err != nil {
 		a.session.Out.Debug("[%s] Error: %v\n", a.ID(), err)
@@ -216,14 +226,9 @@ func (a *URLScreenshotter) killChromeProcessIfRunning(cmd *exec.Cmd) {
 	if cmd.Process == nil {
 		return
 	}
-	// Kill the whole process group (negative PID) so Chrome's child
-	// processes are terminated too, then release our handle. Killing must
-	// happen before Release, otherwise the process handle is detached and
-	// the signal is lost.
-	if pgid, err := syscall.Getpgid(cmd.Process.Pid); err == nil {
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-	} else {
-		_ = cmd.Process.Kill()
-	}
+	// Kill the whole Chrome process tree, then release our handle. Killing
+	// must happen before Release, otherwise the process handle is detached
+	// and the signal is lost.
+	killChromeProcessTree(cmd)
 	_ = cmd.Process.Release()
 }
