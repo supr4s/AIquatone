@@ -1,0 +1,24 @@
+/aiquatone
+/aquatone_report.html
+/aquatone_session.json
+/aquatone_urls.txt
+/headers/
+/html/
+/screenshots/
+
+# Local development tooling
+/.agents/
+/.claude/
+/.codex/
+/CLAUDE.md
+
+# Editor and OS files
+/.idea/
+/.vscode/
+*.swp
+.DS_Store
+
+# Go test/build output
+*.test
+*.out
+/coverage.txt
