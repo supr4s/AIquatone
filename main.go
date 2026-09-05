@@ -114,12 +114,12 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err = renderReport(&parsedSession, template, sess.GetFilePath("aquatone_report.html")); err != nil {
+		if err = renderReport(&parsedSession, template, sess.GetFilePath("aiquatone_report.html")); err != nil {
 			sess.Out.Fatal("Error during report generation: %s\n", err)
 			os.Exit(1)
 		}
 		sess.Out.Important(" done\n\n")
-		sess.Out.Important("Wrote HTML report to: %s\n\n", sess.GetFilePath("aquatone_report.html"))
+		sess.Out.Important("Wrote HTML report to: %s\n\n", sess.GetFilePath("aiquatone_report.html"))
 		os.Exit(0)
 	}
 
@@ -218,7 +218,7 @@ func main() {
 	sess.WaitGroup.Wait()
 
 	sess.Out.Important("Calculating page structures...")
-	urlsFile, err := os.Create(sess.GetFilePath("aquatone_urls.txt"))
+	urlsFile, err := os.Create(sess.GetFilePath("aiquatone_urls.txt"))
 	if err != nil {
 		sess.Out.Fatal("Unable to create URL output file: %s\n", err)
 		os.Exit(1)
@@ -284,14 +284,14 @@ func main() {
 		sess.Out.Fatal("Can't read report template file\n")
 		os.Exit(1)
 	}
-	if err = renderReport(sess, template, sess.GetFilePath("aquatone_report.html")); err != nil {
+	if err = renderReport(sess, template, sess.GetFilePath("aiquatone_report.html")); err != nil {
 		sess.Out.Fatal("Error during report generation: %s\n", err)
 		os.Exit(1)
 	}
 	sess.Out.Important(" done\n\n")
 
 	sess.Out.Important("Writing session file...")
-	err = sess.SaveToFile("aquatone_session.json")
+	err = sess.SaveToFile("aiquatone_session.json")
 	if err != nil {
 		sess.Out.Error("Failed!\n")
 		sess.Out.Debug("Error: %v\n", err)
@@ -315,5 +315,5 @@ func main() {
 	sess.Out.Info(" - Successful : %v\n", sess.Stats.ScreenshotSuccessful)
 	sess.Out.Info(" - Failed     : %v\n\n", sess.Stats.ScreenshotFailed)
 
-	sess.Out.Important("Wrote HTML report to: %s\n\n", sess.GetFilePath("aquatone_report.html"))
+	sess.Out.Important("Wrote HTML report to: %s\n\n", sess.GetFilePath("aiquatone_report.html"))
 }

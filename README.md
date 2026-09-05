@@ -48,12 +48,12 @@ go install github.com/supr4s/aiquatone@latest
 cat targets.txt | ./aiquatone -out ./results
 cat targets.txt | ./aiquatone -ports large -out ./results
 cat scan.xml | ./aiquatone -nmap -out ./results
-./aiquatone -session ./results/aquatone_session.json -out ./results
+./aiquatone -session ./results/aiquatone_session.json -out ./results
 ```
 
 URLs are requested directly; hostnames and IPs are port-scanned first. The
-output directory is created if needed and receives `aquatone_report.html`,
-`aquatone_urls.txt`, `aquatone_session.json` and the `headers/`, `html/`
+output directory is created if needed and receives `aiquatone_report.html`,
+`aiquatone_urls.txt`, `aiquatone_session.json` and the `headers/`, `html/`
 and `screenshots/` evidence. Run `./aiquatone -h` for all options.
 
 Only scan systems you are explicitly authorized to test.
