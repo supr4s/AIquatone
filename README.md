@@ -26,9 +26,6 @@ reproducible HTTP, DNS, browser, fingerprint and heuristic signals.
   export
 - Linux and Windows binaries
 
-The inherited subdomain-takeover detector is disabled until its signatures
-are refreshed.
-
 ## Install
 
 Download the archive for your platform from the
@@ -57,6 +54,16 @@ output directory is created if needed and receives `aiquatone_report.html`,
 and `screenshots/` evidence. Run `./aiquatone -h` for all options.
 
 Only scan systems you are explicitly authorized to test.
+
+## Screenshots
+
+<img width="1275" height="1003" alt="image" src="https://github.com/user-attachments/assets/5a45a40a-33bb-4925-86cf-79526e8afbed" />
+
+<img width="1196" height="364" alt="image" src="https://github.com/user-attachments/assets/465d4c29-74af-4138-a422-899b3e9767e9" />
+
+<img width="1249" height="643" alt="image" src="https://github.com/user-attachments/assets/069de76b-5d69-4833-a7f5-4188be74176b" />
+
+<img width="1166" height="266" alt="image" src="https://github.com/user-attachments/assets/7083f561-c5ce-448c-a34c-67c19cb7dafb" />****
 
 ## Development
 
