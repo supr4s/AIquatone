@@ -233,3 +233,130 @@ func TestMinioNotMatchedInDominio(t *testing.T) {
 		t.Error("expected minio host detection")
 	}
 }
+
+func parseDocForTest(t *testing.T, html string) *goquery.Document {
+	t.Helper()
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		t.Fatalf("failed to parse test HTML: %v", err)
+	}
+	return doc
+}
+
+func TestAdminPageIgnoresSubstringsAndLongHeadings(t *testing.T) {
+	f := &URLTechnologyFingerprinter{}
+	falsePositives := map[string]string{
+		"romanian verb":    `<html><head><title>Afaceri smart</title></head><body><h3 class="footer-title">Administrezi un spatiu commercial</h3></body></html>`,
+		"article card":     `<html><head><title>Orange Newsroom</title></head><body><h2 class="m-article-card__title">Top management changes announced for the next fiscal year</h2></body></html>`,
+		"badminton":        `<html><head><title>Badminton club</title></head><body></body></html>`,
+		"suggestion":       `<html><head><title>Suggestion box</title></head><body></body></html>`,
+		"password manager": `<html><head><title>Best password manager</title></head><body></body></html>`,
+	}
+	for name, html := range falsePositives {
+		if f.hasAdminPage(parseDocForTest(t, html), strings.ToLower(html), "https://example.com/") {
+			t.Errorf("%s: expected no Admin Page", name)
+		}
+	}
+
+	truePositives := map[string]string{
+		"title":   `<html><head><title>Admin - MyApp</title></head><body></body></html>`,
+		"heading": `<html><head><title>MyApp</title></head><body><h1>Administration</h1></body></html>`,
+		"french":  `<html><head><title>Tableau de bord</title></head><body></body></html>`,
+	}
+	for name, html := range truePositives {
+		if !f.hasAdminPage(parseDocForTest(t, html), strings.ToLower(html), "https://example.com/") {
+			t.Errorf("%s: expected Admin Page", name)
+		}
+	}
+	if !f.hasAdminPage(nil, "", "https://example.com/admin/") {
+		t.Errorf("url: expected Admin Page")
+	}
+}
+
+func TestSensitiveExposureIgnoresPublicAPIKeys(t *testing.T) {
+	f := &URLTechnologyFingerprinter{}
+	body := `<script>const ghostSearchApiKey = '8f6024127a20112c41b734c513'; var api_key = "AIza..."; </script>`
+	if f.hasSensitiveExposure(nil, strings.ToLower(body), "https://example.com/") {
+		t.Fatalf("public api keys must not trigger Sensitive Exposure")
+	}
+	body = `<pre>AWS_SECRET_ACCESS_KEY=abc\nsecret_key: hunter2</pre>`
+	if !f.hasSensitiveExposure(nil, strings.ToLower(body), "https://example.com/") {
+		t.Fatalf("expected Sensitive Exposure for secret_key")
+	}
+}
+
+func TestMFAIgnoresPasskeyAutofillHint(t *testing.T) {
+	if hasMFA(`<input autocomplete="username webauthn" name="identifier">`, "sign in") {
+		t.Fatalf("passkey autofill hint alone must not be MFA")
+	}
+	if !hasMFA(`<p>Enter the verification code from your authenticator app</p>`, "") {
+		t.Fatalf("expected MFA")
+	}
+}
+
+func TestSSOProviderGoogleBeforeSAML(t *testing.T) {
+	body := `<html><body><form action="https://accounts.google.com/signin"></form><script>["relaystate","samlrequest","sigalg"]</script></body></html>`
+	got := detectSSOProvider("https://dashboard-dev.example.com/", strings.ToLower(body), parseDocForTest(t, body))
+	if got != "Google" {
+		t.Fatalf("expected Google, got %q", got)
+	}
+	if got := detectSSOProvider("https://sso.example.com/saml/sso?SAMLRequest=abc", "", nil); got != "SAML" {
+		t.Fatalf("expected SAML, got %q", got)
+	}
+	if got := detectSSOProvider("https://app.example.com/oauth/authorize?client_id=1", "", nil); got != "" {
+		t.Fatalf("generic /authorize must not be attributed to Auth0, got %q", got)
+	}
+}
+
+func TestInterestingTitleKeyword(t *testing.T) {
+	cases := map[string]string{
+		"Admin - MyApp":                        "admin",
+		"MyApp (preprod)":                      "preprod",
+		"Jenkins [Jenkins]":                    "jenkins",
+		"Index of /backup":                     "index of",
+		"Tableau de bord":                      "tableau de bord",
+		"Dashboard DEV":                        "dashboard",
+		"Orange 5G Lab":                        "",
+		"Sign in - Google Accounts":            "",
+		"Speedtest by Ookla":                   "",
+		"Nos offres de stage et développement": "développement",
+		"Je déteste les lundis":                "",
+		"Contest results":                      "",
+		"Devices and accessories":              "",
+	}
+	for title, want := range cases {
+		if got := interestingTitleKeyword(title, nil); got != want {
+			t.Errorf("%q: got %q, want %q", title, got, want)
+		}
+	}
+	doc := parseDocForTest(t, `<html><head><title>  Staging &ndash; Shop </title></head></html>`)
+	if got := interestingTitleKeyword("", doc); got != "staging" {
+		t.Errorf("doc title: got %q", got)
+	}
+}
+
+func TestInterestingHostnameKeyword(t *testing.T) {
+	cases := map[string]string{
+		"https://temperature-dashboard-dev.orange.ro/": "dashboard",
+		"https://ndt-sbx.example.com/":                 "sbx",
+		"https://nbe-ppr.example.com/":                 "ppr",
+		"http://testaes.example.com:8080/":             "test",
+		"https://dev01.example.co.uk/":                 "dev",
+		"https://my-admin.example.com/":                "admin",
+		"https://contest.example.com/":                 "",
+		"https://devices.example.com/":                 "",
+		"https://www.example.com/":                     "",
+		"https://example.com/admin":                    "",
+		"https://test.com/":                            "",
+		"http://10.0.0.1:8080/":                        "",
+		"https://newsroom.example.com/":                "",
+		"https://content-ci360.example.com/":           "",
+		"https://ci.example.com/":                      "ci",
+		"https://uat2.example.com/":                    "uat",
+	}
+	for raw, want := range cases {
+		if got := interestingHostnameKeyword(raw); got != want {
+			t.Errorf("%s: got %q, want %q", raw, got, want)
+		}
+	}
+}

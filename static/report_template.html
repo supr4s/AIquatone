@@ -548,6 +548,9 @@
               <div class="card-url">
                 <a :href="page.url" target="_blank">${ page.url }</a>
               </div>
+              <div v-if="page.pageTitle" style="font-size:12px;color:#495057;margin-top:2px;" :title="page.pageTitle">
+                ${ page.pageTitle.length > 90 ? page.pageTitle.slice(0, 90) + '…' : page.pageTitle }
+              </div>
               <div v-if="getRedirectTag(page)" style="font-size:12px;color:#6c757d;margin-top:2px;">
                 <em>${ getRedirectTag(page).text }</em>
               </div>

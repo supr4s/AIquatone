@@ -72,11 +72,15 @@ func main() {
 	fi, err := os.Stat(*sess.Options.OutDir)
 
 	if os.IsNotExist(err) {
-		sess.Out.Fatal("Output destination %s does not exist\n", *sess.Options.OutDir)
+		if err := os.MkdirAll(*sess.Options.OutDir, 0755); err != nil {
+			sess.Out.Fatal("Failed to create output destination %s: %s\n", *sess.Options.OutDir, err)
+			os.Exit(1)
+		}
+		sess.Out.Info("Created output directory %s\n", *sess.Options.OutDir)
+	} else if err != nil {
+		sess.Out.Fatal("Cannot access output destination %s: %s\n", *sess.Options.OutDir, err)
 		os.Exit(1)
-	}
-
-	if !fi.IsDir() {
+	} else if !fi.IsDir() {
 		sess.Out.Fatal("Output destination must be a directory\n")
 		os.Exit(1)
 	}

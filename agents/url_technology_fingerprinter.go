@@ -314,6 +314,16 @@ func (a *URLTechnologyFingerprinter) detectFeatures(page *core.Page) {
 		a.session.Out.Debug("[%s] Detected open-redirect parameter on %s\n", a.ID(), page.URL)
 	}
 
+	if kw := interestingTitleKeyword(page.PageTitle, doc); kw != "" {
+		page.AddTag("Interesting Title", "danger", "")
+		a.session.Out.Debug("[%s] Interesting title keyword %q on %s\n", a.ID(), kw, page.URL)
+	}
+
+	if kw := interestingHostnameKeyword(page.URL); kw != "" {
+		page.AddTag("Interesting Hostname", "danger", "")
+		a.session.Out.Debug("[%s] Interesting hostname keyword %q on %s\n", a.ID(), kw, page.URL)
+	}
+
 	if a.hasCaptcha(lowerBody) {
 		page.AddTag("CAPTCHA", "feature", "")
 		a.session.Out.Debug("[%s] Detected CAPTCHA on %s\n", a.ID(), page.URL)
@@ -602,10 +612,11 @@ type ssoProviderPattern struct {
 
 var ssoProviderPatterns = []ssoProviderPattern{
 	{Name: "Okta", Patterns: []string{"okta-sign-in", "okta-signin-widget", "oktasignin", "okta.com"}},
-	{Name: "Auth0", Patterns: []string{"auth0-lock", "auth0lock", "auth0.com", "/authorize"}},
+	{Name: "Google", Patterns: []string{"accounts.google.com", "accounts.youtube.com", "gsi/client", "g_id_onload", "google-signin"}},
+	{Name: "Auth0", Patterns: []string{"auth0-lock", "auth0lock", "auth0.com", "auth0-spa-js"}},
 	{Name: "Microsoft Entra", Patterns: []string{"microsoftonline.com", "login.microsoft.com", "login.live.com", "azuread", "azure ad", "azureb2c"}},
 	{Name: "ADFS", Patterns: []string{"adfs/ls", "/adfs/", "adfs."}},
-	{Name: "Keycloak", Patterns: []string{"keycloak", "/realms/", "openid-connect"}},
+	{Name: "Keycloak", Patterns: []string{"keycloak", "/realms/", "/protocol/openid-connect"}},
 	{Name: "Ping Identity", Patterns: []string{"pingfederate", "pingone", "pingidentity", "ping_identity"}},
 	{Name: "ForgeRock", Patterns: []string{"forgerock", "openam"}},
 	{Name: "Duo", Patterns: []string{"duosecurity", "duo_iframe", "duo.com"}},
@@ -614,7 +625,7 @@ var ssoProviderPatterns = []ssoProviderPattern{
 	{Name: "Firebase Auth", Patterns: []string{"firebaseapp.com/__/auth", "firebase auth", "firebaseui-auth"}},
 	{Name: "Supabase Auth", Patterns: []string{"supabase.auth", "supabase.co/auth", "gotrue"}},
 	{Name: "Clerk", Patterns: []string{"clerk.accounts", "clerk-js", "clerk.com"}},
-	{Name: "SAML", Patterns: []string{"samlrequest", "samlresponse", "saml2", "saml"}},
+	{Name: "SAML", Patterns: []string{"samlrequest=", "samlresponse=", "saml2", "/saml/", "saml/sso", "saml/acs", "saml/metadata"}},
 	{Name: "CAS", Patterns: []string{"/cas/login", "servicevalidate", "ticket-granting"}},
 	{Name: "Shibboleth", Patterns: []string{"shibboleth", "shibsession"}},
 }
@@ -905,6 +916,9 @@ func hasMFA(lowerBody string, title string) bool {
 	if text == "" {
 		return false
 	}
+	// autocomplete="username webauthn" is the browser passkey autofill hint
+	// present on most modern login forms; it does not mean MFA is enforced.
+	text = strings.ReplaceAll(text, "username webauthn", "username")
 	for _, pattern := range mfaBodyPatterns {
 		if pattern.MatchString(text) {
 			return true
@@ -952,18 +966,14 @@ var adminURLPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)[/\?#&]webmin`),
 }
 
-var adminBodyPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)<title>[^<]*(?:admin|dashboard|control\s*panel|back\s*office)[^<]*</title>`),
-	regexp.MustCompile(`(?i)<h[1-3][^>]*>[^<]*(?:admin(?:istrat(?:ion|or))?|dashboard|control\s*panel|management)[^<]*</h[1-3]>`),
-}
+// adminKeywordPattern matches whole admin-related words only. Substring
+// matching produced false positives such as "administrezi" (Romanian),
+// "badminton", "suggestion" (for "gestion") and "top management".
+var adminKeywordPattern = regexp.MustCompile(`(?i)\b(?:admin|administrator|administration|dashboard|control\s*panel|back[\s-]?office|management\s+console|tableau\s+de\s+bord|panneau\s+d'administration)\b`)
 
-var adminTitleKeywords = []string{
-	"admin", "administrator", "administration",
-	"dashboard", "control panel",
-	"back office", "backoffice",
-	"management console", "manager",
-	"panneau", "gestion",
-}
+// Headings longer than this are article titles or marketing copy, not the
+// name of an admin interface.
+const adminHeadingMaxLength = 48
 
 func (a *URLTechnologyFingerprinter) hasAdminPage(doc *goquery.Document, lowerBody string, lowerURL string) bool {
 	for _, pattern := range adminURLPatterns {
@@ -972,24 +982,25 @@ func (a *URLTechnologyFingerprinter) hasAdminPage(doc *goquery.Document, lowerBo
 		}
 	}
 
-	if lowerBody != "" {
-		for _, pattern := range adminBodyPatterns {
-			if pattern.MatchString(lowerBody) {
-				return true
-			}
-		}
+	if doc == nil {
+		return false
 	}
 
-	if doc != nil {
-		title := strings.ToLower(doc.Find("title").Text())
-		for _, kw := range adminTitleKeywords {
-			if strings.Contains(title, kw) {
-				return true
-			}
-		}
+	title := strings.TrimSpace(doc.Find("title").Text())
+	if adminKeywordPattern.MatchString(title) {
+		return true
 	}
 
-	return false
+	found := false
+	doc.Find("h1, h2, h3").EachWithBreak(func(i int, h *goquery.Selection) bool {
+		text := strings.TrimSpace(h.Text())
+		if len(text) <= adminHeadingMaxLength && adminKeywordPattern.MatchString(text) {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
 }
 
 // --- API Endpoint Detection ---
@@ -1397,7 +1408,10 @@ var sensitiveBodyPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)phpinfo\(\)`),
 	regexp.MustCompile(`(?i)DB_PASSWORD|DB_HOST|DB_USERNAME`),
 	regexp.MustCompile(`(?i)MYSQL_ROOT_PASSWORD`),
-	regexp.MustCompile(`(?i)(?:access_?key|secret_?key|api_?key|private_?key)\s*[:=]`),
+	// api_key is deliberately excluded: public search/maps/analytics keys
+	// are embedded in almost every marketing page. The word boundary keeps
+	// identifiers such as "ghostsearchapikey" from matching.
+	regexp.MustCompile(`(?i)\b(?:access_?key|secret_?key|private_?key|client_?secret|api_?secret)\s*[:=]`),
 	regexp.MustCompile(`(?i)-----BEGIN (?:RSA |DSA |EC )?PRIVATE KEY-----`),
 	regexp.MustCompile(`(?i)-----BEGIN CERTIFICATE-----`),
 	regexp.MustCompile(`(?i)AWS_ACCESS_KEY_ID`),
