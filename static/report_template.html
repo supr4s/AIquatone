@@ -532,9 +532,9 @@
           </span>
         </div>
 
-        <div v-if="selectedFeature" class="filtered-urls-list">
+        <div v-if="selectedFeature || (showAllByDefault && filteredPages.length > 0)" class="filtered-urls-list">
           <div class="filter-tab-header">
-            <h4>${ selectedFeature } <span class="badge badge-info">${ filteredPages.length } URLs</span></h4>
+            <h4>${ selectedFeature || allLabel } <span class="badge badge-info">${ filteredPages.length } URLs</span></h4>
             <div>
               <button class="btn btn-sm btn-outline-success export-btn" @click="copyURLs(selectedFeature, filteredPages)">
                 <span v-if="copySuccess">Copied!</span><span v-else>Export All URLs</span>
@@ -897,7 +897,11 @@
         subtitle: { type: String, default: '' },
         emptyHint: { type: String, default: 'Select a feature to see matching URLs' },
         tagTypes: { type: Array, default: () => ['feature', 'danger'] },
-        showUncategorized: { type: Boolean, default: true }
+        showUncategorized: { type: Boolean, default: true },
+        // When true, every page carrying one of tagTypes is listed as soon
+        // as the tab opens; clicking a badge narrows the list to one tag.
+        showAllByDefault: { type: Boolean, default: false },
+        allLabel: { type: String, default: 'All' }
       },
       computed: {
         allSelected() {
@@ -940,8 +944,15 @@
           return result;
         },
         filteredPages() {
-          if (!this.selectedFeature) return [];
           let featureTypes = this.tagTypes;
+          if (!this.selectedFeature) {
+            if (!this.showAllByDefault) return [];
+            // Pages with the most matching keywords first, then by URL.
+            let countTags = page => (page.tags || []).filter(tag => featureTypes.indexOf(tag.type) !== -1).length;
+            return this.pages
+              .filter(page => countTags(page) > 0)
+              .sort((a, b) => countTags(b) - countTags(a) || a.url.localeCompare(b.url));
+          }
           if (this.selectedFeature === 'Uncategorized') {
             return this.pages.filter(page => {
               if (!page.tags) return true;
@@ -1168,7 +1179,7 @@
         { path: '/pages/graph', component: Vue.component('GraphPage'), props: { pages: data.pages, pageSimilarityClusters: data.pageSimilarityClusters } },
         { path: '/pages/technologies', component: Vue.component('TechnologiesPage'), props: { pages: data.pages } },
         { path: '/pages/features', component: Vue.component('FeaturesPage'), props: { pages: data.pages } },
-        { path: '/pages/interesting-titles', component: Vue.component('FeaturesPage'), props: { pages: data.pages, title: 'Interesting Titles', subtitle: 'Pages whose <title> contains a triage keyword (admin, dev, preprod, intranet, jenkins, vpn, backup, ...)', emptyHint: 'Select a keyword to see pages whose title contains it', tagTypes: ['interesting'], showUncategorized: false } },
+        { path: '/pages/interesting-titles', component: Vue.component('FeaturesPage'), props: { pages: data.pages, title: 'Interesting Titles', subtitle: 'Pages whose <title> contains a triage keyword (admin, dev, preprod, intranet, jenkins, vpn, backup, ...). Click a keyword to filter, click it again to show all.', emptyHint: 'No page title contains a triage keyword', tagTypes: ['interesting'], showUncategorized: false, showAllByDefault: true, allLabel: 'All interesting titles' } },
         { path: '/pages/stats', component: Vue.component('StatsPage'), props: { pages: data.pages, pageSimilarityClusters: data.pageSimilarityClusters, stats: data.stats } },
         { path: '*', component: Vue.component('NotFoundPage') }
       ]
